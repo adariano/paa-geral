@@ -1,0 +1,7 @@
+ragas==0.2.9
+datasets==3.2.0
+langchain-ollama==0.2.2
+langchain-huggingface==0.1.2
+httpx==0.28.1
+pandas==2.2.3
+python-dotenv==1.0.1

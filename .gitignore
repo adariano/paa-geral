@@ -1,0 +1,57 @@
+# Dados completos e derivados: não versionar corpus, chunks ou índices locais
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+qdrant_storage/
+ollama_data/
+
+# Modelos, embeddings e formatos pesados
+*.part
+*.bin
+*.model
+*.faiss
+*.hnsw
+*.npy
+*.npz
+*.parquet
+*.pkl
+*.pickle
+*.tar.gz
+*.zip
+*.7z
+*.bz2
+*.xml
+!frontend/**/*.xml
+
+# Python e ambientes virtuais
+__pycache__/
+*.py[cod]
+*$py.class
+.venv*/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Resultados gerados localmente
+benchmarks/results/*.csv
+evaluation/results/
+evaluation/ragas_results.csv
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+*.local
+
+# Variáveis de ambiente e IDEs
+.env
+frontend/.env
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
