@@ -1,0 +1,4 @@
+-r requirements-runtime.txt
+ragas>=0.2,<1
+datasets>=3,<5
+langchain-ollama>=0.2,<2

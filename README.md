@@ -1,333 +1,239 @@
-# PAA — Busca Semântica em História Brasileira
+# PAA RAG local
 
-Projeto da disciplina **Projeto e Análise de Algoritmos (PAA 2/2026)**, da Universidade de Brasília. A aplicação permite fazer perguntas em linguagem natural sobre História Brasileira, recuperar trechos de documentos por busca semântica, produzir respostas com uma LLM local e exibir as fontes utilizadas.
+Protótipo local de busca semântica e geração aumentada por recuperação (RAG)
+sobre um piloto de chunks da Wikipédia. A interface prevista nesta entrega é
+uma CLI; a resposta pode ser impressa para uma pessoa ou emitida como JSON
+para consumo futuro por uma interface gráfica.
 
+## Requisitos
 
-## Integrantes
+- Python 3.12.
+- Ollama instalado e em execução.
+- Modelo local, por exemplo `qwen2.5:3b`.
+- Artefatos de embeddings para a amostra ou para o piloto.
+- Acesso à internet na primeira execução da E5, para baixar os pesos se não
+estiverem no cache local.
 
-| Nome | Matrícula |
-| :--- | :--- |
-| Adriano Lopes de Sousa | 170097960 |
-| Breno Back dos Santos Miranda da Silva | 190063980 |
-| Gabriel Bismarck Gonçalves Fagundes | 170103323 |
-| Mariana Soares Oliveira | 23101363 |
-| Mário Augusto Vieira dos Santos | 231035778 |
-
-## Stack tecnológica
-
-| Camada | Tecnologia | Uso no projeto |
-| :--- | :--- | :--- |
-| Front-end | Vue 3, TypeScript, Tailwind CSS | Interface de perguntas, respostas, tempos e fontes |
-| Back-end | Python, FastAPI | API e orquestração do fluxo RAG |
-| Processamento | Pandas, NumPy | Leitura por lotes e operações numéricas |
-| Word embeddings | Gensim / Word2Vec | Vetores de palavras e média por documento |
-| Sentence embeddings | Sentence Transformers | Vetorização de perguntas e chunks |
-| Busca exata | TF-IDF + cosseno e produto interno normalizado | Baselines lineares |
-| Busca aproximada | hnswlib (HNSW) | Comparação de busca aproximada por vizinhos |
-| Banco vetorial | Qdrant | Armazenamento e recuperação de vetores com metadados |
-| LLM local | Phi-3 Mini ou SmolLM | Geração da resposta com contexto recuperado |
-| Execução da LLM | Ollama | Servir o modelo localmente |
-| Avaliação | RAGAS | Faithfulness, answer relevancy, context precision e context recall |
-| Versionamento | Git e GitHub | Colaboração e histórico do código |
-
-**Nota sobre FAISS:** a dependência FAISS foi retirada desta configuração inicial porque o benchmark entregue utiliza `hnswlib` e a busca exata é feita diretamente com NumPy/scikit-learn. FAISS pode ser acrescentado posteriormente como outro método experimental, com seu próprio teste e registro de versão.
-
-## Estrutura do repositório
-
-```text
-paa-historia-brasil/
-├── backend/
-│   └── app/
-│       ├── main.py                 # API FastAPI
-│       ├── schemas.py              # Contratos da API e das citações
-│       └── services/               # Qdrant e Ollama
-├── frontend/                       # Vue + TypeScript + Tailwind
-├── pipeline/
-│   ├── download.py                 # Download por URL direta
-│   ├── report_corpus.py             # Mede somente bytes de texto
-│   ├── preprocess.py               # JSONL em lotes e chunks por tokens
-│   └── ingest_qdrant.py             # Embeddings e ingestão incremental
-├── benchmarks/
-│   ├── benchmark_search.py         # TF-IDF, Word2Vec, embeddings e HNSW
-│   └── results/                    # Resultados locais (não versionados)
-├── evaluation/
-│   ├── eval_ragas.py                # Avaliação RAGAS e latência
-│   └── test_questions.json         # Conjunto inicial de smoke tests
-├── data/
-│   ├── sample/                     # Pequena amostra versionada
-│   ├── raw/                        # Corpus original (não versionado)
-│   └── processed/                  # Chunks JSONL (não versionados)
-├── docs/                           # Fontes, licenças e metodologia
-├── docker-compose.yml              # Qdrant com versão fixada
-├── .env.example
-└── .gitignore
-```
-
-## Pré-requisitos
-
-- Python **3.11** recomendado (use a mesma versão entre os integrantes).
-- Node.js 18 ou superior e npm.
-- Docker Desktop ou Docker Engine com Docker Compose.
-- Ollama instalado separadamente na máquina que executará a LLM.
-- Espaço em disco para o corpus, dados processados e armazenamento Qdrant. O consumo de RAM depende do modelo e da configuração de lotes.
-
-## Configuração local
-
-### 1. Clonar e preparar as variáveis
+Instalação de dependências em um ambiente virtual Python 3.12:
 
 ```bash
-git clone https://github.com/masolivs/paa-historia-brasil.git
-cd paa-historia-brasil
-cp .env.example .env
-cp frontend/.env.example frontend/.env
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements-runtime.txt
 ```
 
-No PowerShell, substitua os dois comandos `cp` por:
-
-```powershell
-Copy-Item .env.example .env
-Copy-Item frontend/.env.example frontend/.env
-```
-
-Revise o `.env`. O mesmo `EMBEDDING_MODEL` deve ser utilizado no pré-processamento, na ingestão e na API. Alterar o modelo exige gerar novamente os embeddings e recriar a coleção vetorial.
-
-### 2. Iniciar Qdrant
+Para avaliação RAGAS, instale também:
 
 ```bash
-docker compose up -d qdrant
+.venv/bin/python -m pip install -r requirements-evaluation.txt
 ```
 
-- API: `http://localhost:6333`
-- Dashboard: `http://localhost:6333/dashboard`
-
-A imagem do Qdrant está fixada em `v1.12.1` para reduzir diferenças entre as máquinas do grupo.
-
-### 3. Instalar e iniciar Ollama
-
-Instale o Ollama conforme o sistema operacional e baixe o modelo escolhido pelo grupo. Exemplo:
+Inicie o serviço Ollama se ainda não estiver em execução e baixe o modelo:
 
 ```bash
-ollama pull phi3:mini
-ollama list
+ollama pull qwen2.5:3b
 ```
 
-A disponibilidade e o desempenho do modelo dependem da máquina. Registrem nos experimentos o modelo e a quantização efetivamente usados. O Ollama não é iniciado pelo `docker-compose.yml` nesta configuração.
+O Ollama costuma ser iniciado como serviço pelo instalador. Se a porta local
+11434 já estiver ocupada, o serviço provavelmente já está ativo; não inicie
+uma segunda instância.
 
-### 4. Preparar o ambiente do pipeline e carregar a amostra
+## Fazer uma pergunta
+
+Execute a partir da raiz do projeto:
 
 ```bash
-python -m venv .venv-pipeline
+python -m paa_rag ask \
+  --embedding e5 \
+  --search hnsw \
+  --question "O que é astronomia?" \
+  --k 5 \
+  --llm qwen2.5:3b
 ```
 
-Ativação no PowerShell:
-
-```powershell
-.\.venv-pipeline\Scripts\Activate.ps1
-```
-
-Ativação no Linux/macOS:
+Para obter JSON na saída padrão:
 
 ```bash
-source .venv-pipeline/bin/activate
+python -m paa_rag ask \
+  --embedding e5 \
+  --search hnsw \
+  --question "O que é astronomia?" \
+  --format json \
+  --output evaluation-pilot/answer.json
 ```
 
-Instale as dependências e execute:
+O JSON contém pergunta, resposta, método vetorial, chunks recuperados, citações
+com título e URL, e tempos de inicialização, embedding, busca, geração e total.
+As mensagens de progresso são enviadas para `stderr`, separadas da saída JSON.
+
+## Gerar embeddings a partir dos dados existentes
+
+Os geradores recebem um JSONL de chunks: um objeto JSON por linha, com pelo
+menos `chunk_id` e `text`. Para que as citações incluam título e URL, o objeto
+também deve ter `document_id`, `source`, `language`, `title`, `url`,
+`chunk_index` e `text_hash`.
+
+### E5 Sentence Embeddings
+
+Com o ambiente Python 3.12 e o piloto existente:
 
 ```bash
-pip install -r pipeline/requirements.txt
-python pipeline/preprocess.py --input data/sample/sample_historia_brasil.jsonl --output data/processed/sample_chunks.jsonl
-python pipeline/ingest_qdrant.py --input data/processed/sample_chunks.jsonl --batch-size 64
+./.venv-py312/bin/python generate_pilot_embeddings.py \
+  --chunks corpus-pilot/chunks.jsonl \
+  --output embeddings-pilot/e5-small \
+  --model intfloat/multilingual-e5-small \
+  --batch-size 32 \
+  --limit 100000
 ```
 
-O padrão de chunk é **100 tokens com sobreposição de 15 tokens**, medidos pelo tokenizer do modelo de embeddings configurado. Esse valor é conservador em relação ao limite de sequência usual de 128 tokens do modelo selecionado; confirmem o limite real quando alterarem o modelo. O script mantém o texto em lotes de documentos e grava os chunks gradualmente.
+O gerador codifica os chunks com `passage: ` e cria `vectors.f32.npy` (384
+dimensões float32 normalizadas), `chunk_ids.jsonl`, `metadata.jsonl` e
+`manifest.json`. Na primeira execução, Sentence Transformers pode baixar os
+pesos do Hugging Face.
 
-### 5. Executar o back-end
+### Word2Vec Average
 
-Em outro terminal, a partir da raiz do repositório:
+O Word2Vec é treinado sobre os textos selecionados; depois, cada chunk é
+representado pela média dos vetores das palavras conhecidas:
 
 ```bash
-python -m venv .venv-backend
+./.venv-py312/bin/python generate_word2vec_embeddings.py \
+  --chunks corpus-pilot/chunks.jsonl \
+  --output embeddings-pilot/word2vec \
+  --limit 100000 \
+  --dimension 100 \
+  --window 5 \
+  --min-count 5 \
+  --epochs 5 \
+  --workers 12
 ```
 
-Ative o ambiente conforme seu sistema e instale:
+O resultado contém os vetores, IDs, metadados, manifesto e `word2vec.model`.
+Ao contrário da E5, o Word2Vec desse comando é treinado no conjunto de chunks.
+
+### Apontar para dados e embeddings externos
+
+Os arquivos não precisam estar dentro do diretório de exportação. Informe o
+caminho de chunks e de saída ao gerador; depois, passe o manifesto resultante
+ao CLI:
 
 ```bash
-pip install -r backend/requirements.txt
-uvicorn backend.app.main:app --reload --port 8000
+./.venv-py312/bin/python generate_pilot_embeddings.py \
+  --chunks /dados/corpus-pilot/chunks.jsonl \
+  --output /dados/embeddings/e5-small \
+  --limit 100000
+
+python -m paa_rag ask \
+  --manifest /dados/embeddings/e5-small/manifest.json \
+  --search hnsw \
+  --question "O que é astronomia?"
 ```
 
-Documentação interativa: `http://localhost:8000/docs`.
+Para Word2Vec, use `generate_word2vec_embeddings.py` com os mesmos caminhos.
+Mantenha juntos o manifesto, os vetores, IDs e metadados; Word2Vec também exige
+seu arquivo de modelo. O campo `chunks` do manifesto deve apontar para o JSONL
+correspondente, pois o CLI o utiliza para carregar os textos recuperados.
 
-Para testar somente a interface, defina `MOCK_MODE=true` no `.env`. Os resultados do modo mock são exemplos simulados e **não devem ser usados como medição de desempenho ou avaliação acadêmica**.
+O parâmetro `--limit 100000` limita o piloto. `--limit 0` processaria todos os
+registros do arquivo; **não use isso no corpus completo nesta máquina**. E5
+precisaria fazer inferência para cada chunk; o gerador Word2Vec mantém o corpus
+selecionado em memória durante o treinamento. Os resultados medidos neste
+projeto são apenas para 100.000 chunks.
 
-### 6. Executar o front-end
+Para verificar uma geração, confira `count` e `dimension` no manifesto e
+compare `count` com o número de linhas de `chunk_ids.jsonl`. O manifesto e os
+três arquivos de saída precisam pertencer à mesma geração.
 
-Em outro terminal:
+Para perguntas sucessivas sem recarregar o modelo e o índice:
 
 ```bash
-cd frontend
-npm install
-npm run dev
+python -m paa_rag chat --embedding e5 --search hnsw
 ```
 
-Acesse `http://localhost:5173`.
+Digite `/sair` para encerrar.
 
-## Corpus de dados: seleção, download e comprovação dos 10 GB
+## Selecionar os quatro métodos
 
-A fonte definitiva ainda precisa ser escolhida pelo grupo. Antes de baixar, preencham `docs/DATA_SOURCES.md` com a coleção, URL original, licença, data de acesso, formato, filtros e estratégia de armazenamento. Não basta informar o tamanho do arquivo compactado: o requisito é de **pelo menos 10 GB de texto puro**.
+| Representação (`--embedding`) | Busca (`--search`) | Manifesto padrão |
+|---|---|---|
+| `e5` | `cosine_exact` | `embeddings-pilot/e5-small/manifest.json` |
+| `e5` | `hnsw` | `embeddings-pilot/e5-small/manifest.json` |
+| `word2vec` | `cosine_exact` | `embeddings-pilot/word2vec/manifest.json` |
+| `word2vec` | `hnsw` | `embeddings-pilot/word2vec/manifest.json` |
 
-Para baixar um arquivo por URL HTTP(S) direta:
+Exemplo Word2Vec + cosseno:
 
 ```bash
-python pipeline/download.py \
-  --url "https://ENDERECO-DIRETO/arquivo.jsonl.gz" \
-  --filename "corpus.jsonl.gz" \
-  --source-name "Nome da coleção" \
-  --license "Licença verificada"
+python -m paa_rag ask \
+  --embedding word2vec \
+  --search cosine_exact \
+  --question "O que é astronomia?"
 ```
 
-No PowerShell, o comando pode ser escrito em uma única linha. O download gera `data/raw/download_manifest.json` com URL, tamanho e SHA-256. O script não escolhe a base, não contorna páginas de autenticação e não verifica a licença por conta própria. Para fontes sem URL direta (por exemplo, datasets distribuídos por ferramentas próprias), sigam o método oficial da fonte e registrem o procedimento.
+O manifesto pode ser sobrescrito com `--manifest`. `--k` define quantos chunks
+recuperar. `--ef` configura o parâmetro de busca HNSW e não altera o cosseno
+exato. `--temperature` controla a aleatoriedade da geração.
 
-Para medir o conteúdo textual de um JSONL, sem contar as chaves e os metadados do JSON:
+## Avaliar um conjunto de perguntas
 
 ```bash
-python pipeline/report_corpus.py data/raw/corpus.jsonl.gz
+python -m paa_rag evaluate \
+  --embedding e5 \
+  --search hnsw \
+  --dataset evaluation-pilot/questions-pt-rag.jsonl \
+  --limit 50 \
+  --output evaluation-pilot/rag-pilot-report.json
 ```
 
-Para arquivos de texto puro:
+O relatório gerado pode ser avaliado pelo RAGAS:
 
 ```bash
-python pipeline/report_corpus.py --mode text data/raw/parte-1.txt data/raw/parte-2.txt
+python evaluate_ragas.py \
+  --rag-report evaluation-pilot/rag-pilot-report.json \
+  --evaluator-model qwen2.5:3b \
+  --output evaluation-pilot/ragas-report.json
 ```
 
-O relatório conta os bytes UTF-8 do campo `text` nos arquivos JSONL. Arquivos `.gz` são lidos sem necessidade de descompactá-los previamente. Conservem o relatório junto aos resultados do projeto para demonstrar o volume efetivo de texto.
+As respostas de referência ficam em
+`evaluation-pilot/expected-answers-pt.jsonl`; são concisas e usadas como
+referência factual. Revise-as antes de tratar os escores automáticos como
+avaliação definitiva.
 
-## Pré-processamento e indexação do corpus
+## Dados e limitações
 
-Pré-processamento em lotes:
+- O corpus completo tem 7.082.981 chunks e 9.075.006.885 bytes de texto:
+  aproximadamente 8,45 GiB ou 9,08 GB decimais.
+- O requisito do enunciado é pelo menos 10 GB de texto puro. O corpus existente
+  fica abaixo desse mínimo; a limitação e os desafios para ampliar e processar
+  o volume estão registrados em `docs/PIPELINE.md`.
+- Os benchmarks vetoriais foram executados com 100.000 chunks, não com o
+  corpus completo. Esse limite evita exigir vários dias de inferência E5 no
+  computador disponível e permite comparar métodos com recursos locais.
+- Não foram gerados embeddings para os 7 milhões de chunks.
+- A amostra de exportação é menor que 100 MB e serve para smoke test. Ela não
+  reproduz a representatividade nem os resultados do piloto integral.
 
-```bash
-python pipeline/preprocess.py \
-  --input data/raw/corpus.jsonl.gz \
-  --output data/processed/chunks.jsonl \
-  --max-tokens 100 \
-  --overlap-tokens 15 \
-  --batch-docs 2000
-```
+## Resultados de recuperação já medidos
 
-Ingestão incremental no Qdrant:
+Em 50 perguntas em português, E5 obteve Recall@10 de 1,00 e MRR/MAP de
+0,8065; Word2Vec Average obteve Recall@10 de 0,30 e MRR/MAP de 0,1319. No
+piloto medido, HNSW teve latência média de 2,49 ms contra 9,04 ms para o
+cosseno exato com E5, sem diferença nas métricas de ranking reportadas.
+Consulte os JSON em `embeddings-pilot/*/retrieval-report.json`. Esses números
+são resultados de recuperação, não resultados RAGAS nem uma avaliação de
+qualidade da resposta da LLM.
 
-```bash
-python pipeline/ingest_qdrant.py \
-  --input data/processed/chunks.jsonl \
-  --batch-size 64 \
-  --encoder-batch-size 32
-```
+## Estrutura
 
-Para recriar a coleção intencionalmente, acrescente `--recreate`. **Atenção:** essa opção apaga todos os pontos da coleção configurada antes de iniciar a carga. Para um teste reduzido, use `--max-records 1000`.
+- `paa_rag/`: engine reutilizável e comandos `ask`, `chat` e `evaluate`.
+- `generate_pilot_embeddings.py`: embeddings E5.
+- `generate_word2vec_embeddings.py`: treinamento Word2Vec e média vetorial.
+- `benchmark_retrieval.py`: Recall@k, MRR, MAP e latência de recuperação.
+- `rag_pilot.py`: compatibilidade com comandos de avaliação anteriores.
+- `evaluate_ragas.py`: avaliação das respostas com RAGAS e Ollama.
+- `tests/`: testes unitários de busca exata.
+- `docs/PIPELINE.md`: arquitetura, métricas, complexidade e terminologia.
+- `build_export.py` (na árvore de desenvolvimento): cria uma cópia portátil
+  sem alterar os dados originais; não é necessário no diretório exportado.
 
-A ingestão gera os embeddings em lotes e envia os pontos ao Qdrant progressivamente. IDs determinísticos tornam a reexecução idempotente para os mesmos pares `doc_id`/`chunk_id`. A coleção e os metadados permanecem no volume local `qdrant_storage/`, ignorado pelo Git.
-
-## Benchmark dos algoritmos
-
-Instale as dependências em ambiente separado ou no ambiente de pipeline:
-
-```bash
-pip install -r benchmarks/requirements.txt
-```
-
-Execute com o limite padrão de 10.000 documentos:
-
-```bash
-python benchmarks/benchmark_search.py \
-  --input data/processed/chunks.jsonl \
-  --queries-file evaluation/test_questions.json \
-  --max-docs 10000 \
-  --top-k 5 \
-  --query-repeats 3
-```
-
-O benchmark mede construção do índice, latência média e P95 (com repetição de consultas), estimativa de memória do índice e, para HNSW, `Recall@K` em relação à busca exata com Sentence Embeddings. Os parâmetros HNSW podem ser alterados por `--hnsw-m`, `--ef-construction` e `--ef-search`.
-
-**Limitação importante:** o benchmark comparativo carrega a amostra selecionada em memória. O padrão de 10.000 documentos é para execução controlada; os resultados devem informar o número de documentos e a máquina usada. `--max-docs 0` tenta carregar tudo e só deve ser usado se houver RAM suficiente. Para estudar o corpus completo, façam experimentos por faixas de tamanho (por exemplo, 1k, 5k, 10k, 25k e 50k) e registrem a memória disponível. A ingestão para o Qdrant, ao contrário, foi projetada para percorrer o JSONL em lotes.
-
-A complexidade descrita no CSV é uma análise teórica simplificada e deve ser explicada no relatório. Para HNSW, não apresentem `O(log N)` como garantia: a busca é aproximada e seu comportamento observado depende da distribuição dos vetores e de parâmetros como `M` e `efSearch`; o pior caso pode se aproximar de uma varredura linear.
-
-Resultados são salvos em `benchmarks/results/metrics.csv`, ignorado pelo Git. Versionem tabelas e gráficos finais escolhidos para o relatório em `docs/`.
-
-## Avaliação com RAGAS
-
-Com a API, Qdrant e Ollama em execução, instale:
-
-```bash
-pip install -r evaluation/requirements.txt
-python evaluation/eval_ragas.py
-```
-
-O script coleta respostas da API e calcula:
-
-- **Faithfulness:** consistência da resposta com o contexto recuperado.
-- **Answer relevancy:** relevância da resposta em relação à pergunta.
-- **Context precision:** qualidade/ordenação dos contextos recuperados.
-- **Context recall:** cobertura das informações necessárias pela recuperação.
-
-Também exporta tempos de resposta com média, mediana (P50) e P95. Os resultados são salvos em `evaluation/results/`.
-
-O arquivo `evaluation/test_questions.json` contém apenas cinco perguntas iniciais: serve para testar o fluxo, não para uma conclusão estatística. Para o experimento final, ampliem para pelo menos 30–50 perguntas variadas, com respostas de referência revisadas pelo grupo. Quando possível, usem um modelo avaliador diferente do modelo de geração (`RAGAS_LLM_MODEL`) e revisem manualmente uma amostra; métricas automáticas dependem da qualidade do avaliador e do conjunto de referência.
-
-## Citações e procedência
-
-Cada chunk mantém `doc_id`, `chunk_id`, título, origem, URL da fonte e texto. A API devolve título, origem, URL, identificador do documento, trecho recuperado e score. O front-end apresenta um link para a fonte original quando a URL estiver disponível.
-
-A LLM recebe os trechos e é instruída a apontar `[Fonte 1]`, `[Fonte 2]` etc. A presença de uma citação gerada no texto não prova, por si só, que a afirmação está correta: confiram se a fonte indicada realmente sustenta a afirmação.
-
-## Testes e verificações
-
-Teste do pré-processamento (ambiente de pipeline com pytest):
-
-```bash
-pip install pytest
-python -m pytest -q pipeline/tests
-```
-
-Verificação manual da API:
-
-- `GET http://localhost:8000/api/health`
-- `POST http://localhost:8000/api/ask`
-
-Exemplo de corpo:
-
-```json
-{
-  "question": "Quando ocorreu a Independência do Brasil?",
-  "top_k": 4
-}
-```
-
-## Organização do trabalho em equipe
-
-Sugestão de branches:
-
-- `feat/dataset-pipeline` — download, medição do corpus e pré-processamento.
-- `feat/ingestion-qdrant` — embeddings e ingestão em lotes.
-- `feat/benchmarks` — métodos, experimentos e gráficos.
-- `feat/backend-frontend` — API, interface, LLM e citações.
-- `feat/evaluation` — conjunto de perguntas, RAGAS e análise dos resultados.
-
-Abram Pull Requests para `main`, descrevam como testar e evitem que duas pessoas alterem simultaneamente o mesmo arquivo sem combinar.
-
-## Licenças
-
-Registrem as licenças e versões das bibliotecas, modelos, corpora e componentes em `docs/LICENSES.md`. A licença do código do projeto não substitui as licenças dos dados e dos modelos.
-
-## Preparar o ZIP para o Aprender3 (limite de 100 MB)
-
-O Git não deve conter os 10 GB, os chunks completos, os índices vetoriais, modelos ou ambientes virtuais. Incluam uma amostra pequena e instruções para baixar o corpus completo.
-
-Após revisar o que está versionado:
-
-```bash
-git archive --format=zip --output=PAA_PrimeiroNome_Matricula_Proj.zip HEAD
-```
-
-Confiram o tamanho do ZIP e incluam o link externo para a base completa e arquivos complementares na entrega.
+Consulte `docs/PIPELINE.md` para detalhes de pipeline, parâmetros, bibliotecas
+e licenças.

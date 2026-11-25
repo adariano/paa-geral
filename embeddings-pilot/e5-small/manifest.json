@@ -1,0 +1,11 @@
+{
+  "chunks": "corpus-pilot/chunks.jsonl",
+  "model": "intfloat/multilingual-e5-small",
+  "representation": "sentence_embedding",
+  "dimension": 384,
+  "count": 2500,
+  "dtype": "float32",
+  "normalized": true,
+  "passage_prefix": "passage: ",
+  "query_prefix": "query: "
+}

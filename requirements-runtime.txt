@@ -1,0 +1,5 @@
+sentence-transformers>=3,<6
+sentencepiece>=0.2,<0.3
+numpy>=2,<3
+hnswlib>=0.8,<0.9
+gensim>=4.3,<5
